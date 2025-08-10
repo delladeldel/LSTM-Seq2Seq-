@@ -19,12 +19,6 @@ input_len = st.sidebar.number_input("Input sequence length (timesteps)", min_val
 output_len = st.sidebar.number_input("Output horizon (timesteps to predict)", min_value=1, value=60, step=1)
 n_features = st.sidebar.number_input("Number of features", min_value=1, value=1, step=1)
 
-st.sidebar.markdown("---")
-st.sidebar.write("Upload model files (optional). If not uploaded, app will try to load from working dir.")
-encoder_file = st.sidebar.file_uploader("seq2seqencodermodelfix.keras"), type=["keras","h5"], key="enc", help="Optional. If not provided, app loads 'seq2seqencodermodelfix.keras' from working dir.")
-decoder_file = st.sidebar.file_uploader("seq2seqdecodermodelfix.keras"), type=["keras","h5"], key="dec")
-scaler_file  = st.sidebar.file_uploader("scaler (9.pkl"), type=["pkl","pickle"], key="scaler")
-
 # helper: save uploaded file to temp file and return path
 def _save_uploaded(u_file, name_hint):
     if u_file is None:
