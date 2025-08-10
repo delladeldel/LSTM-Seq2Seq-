@@ -1,77 +1,81 @@
 import streamlit as st
-import pandas as pd
 import numpy as np
-import joblib
+import pandas as pd
+import tensorflow as tf
+import pickle
 from tensorflow.keras.models import load_model
 
-# --- Load models ---
+# ======== Load Model & Scaler ========
 @st.cache_resource
 def load_models():
     encoder_model = load_model("seq2seqencodermodel.keras")
     decoder_model = load_model("seq2seqdecodermodel.keras")
     return encoder_model, decoder_model
 
-# --- Load scaler ---
 @st.cache_resource
 def load_scaler():
-    return joblib.load("scaler (9).pkl")
+    with open("scaler (9).pkl", "rb") as f:
+        scaler = pickle.load(f)
+    return scaler
 
-# --- Fungsi prediksi Seq2Seq ---
-def predict_sequence(input_seq, encoder_model, decoder_model, output_steps):
-    # Encode input sebagai state awal
-    states_value = encoder_model.predict(input_seq)
+encoder_model, decoder_model = load_models()
+scaler = load_scaler()
 
-    # Decoder input pertama: nol
-    target_seq = np.zeros((1, 1, 1))
+# ======== Inference Function ========
+def predict_seq(input_sequence, input_len=120, output_len=60):
+    # Normalisasi input
+    input_sequence = scaler.transform(np.array(input_sequence).reshape(-1, 1))
+    input_sequence = input_sequence.reshape(1, input_len, 1)
 
-    output = []
-    for _ in range(output_steps):
-        output_tokens, h, c = decoder_model.predict([target_seq] + states_value)
+    # Encode input sequence
+    state_h, state_c = encoder_model.predict(input_sequence)
 
-        # Simpan hasil
-        output.append(output_tokens[0, 0, 0])
+    # Decoder input awal (nol semua)
+    decoder_input = np.zeros((1, 1, 1))
 
-        # Update target_seq dengan output saat ini
-        target_seq = np.array([[[output_tokens[0, 0, 0]]]])
+    decoded_output = []
+    for _ in range(output_len):
+        output, state_h, state_c = decoder_model.predict([decoder_input, state_h, state_c])
+        decoded_output.append(output[0, 0, 0])
+        decoder_input = output
 
-        # Update states
-        states_value = [h, c]
+    # Denormalisasi hasil
+    decoded_output = scaler.inverse_transform(np.array(decoded_output).reshape(-1, 1)).flatten()
+    return decoded_output
 
-    return np.array(output)
+# ======== Streamlit UI ========
+st.title("📈 Seq2Seq LSTM Forecasting")
+st.write("Prediksi nilai sensor **tag_value** untuk 10 menit ke depan.")
 
-# --- Streamlit UI ---
-st.title("Seq2Seq LSTM Forecasting")
-st.write("Upload CSV berisi data sensor dengan kolom `tag_value` untuk memprediksi nilai ke depan.")
+uploaded_file = st.file_uploader("Upload file CSV data sensor (harus ada kolom 'tag_value')", type=["csv"])
 
-uploaded_file = st.file_uploader("Upload file CSV", type=["csv"])
-
-if uploaded_file:
+if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
-    
-    if 'tag_value' not in df.columns:
-        st.error("CSV harus memiliki kolom `tag_value`.")
+
+    if "tag_value" not in df.columns:
+        st.error("CSV harus memiliki kolom 'tag_value'.")
+    elif len(df) < 120:
+        st.error("Data minimal harus memiliki 120 baris untuk prediksi.")
     else:
-        st.write("Data Preview:", df.head())
+        st.success("File diterima!")
+        st.line_chart(df["tag_value"], height=200)
 
-        # Load model dan scaler
-        encoder_model, decoder_model = load_models()
-        scaler = load_scaler()
-
-        # Parameter input/output
-        input_steps = 60
-        output_steps = 60
-
-        # Ambil data terakhir sesuai input_steps
-        data_input = df['tag_value'].values[-input_steps:]
-        data_input = scaler.transform(data_input.reshape(-1, 1))
-        data_input = data_input.reshape(1, input_steps, 1)
+        # Ambil 120 data terakhir
+        last_data = df["tag_value"].values[-120:]
 
         # Prediksi
-        pred_scaled = predict_sequence(data_input, encoder_model, decoder_model, output_steps)
-
-        # Invers normalisasi
-        pred = scaler.inverse_transform(pred_scaled.reshape(-1, 1)).flatten()
+        prediction = predict_seq(last_data)
 
         st.subheader("Hasil Prediksi")
-        st.line_chart(pred)
-        st.write(pred)
+        st.line_chart(prediction, height=200)
+
+        # Gabung data aktual + prediksi
+        df_pred = pd.DataFrame({
+            "Actual": np.concatenate([df["tag_value"].values, [np.nan]*60]),
+            "Prediction": np.concatenate([[np.nan]*len(df), prediction])
+        })
+
+        st.subheader("Aktual vs Prediksi")
+        st.line_chart(df_pred, height=300)
+
+st.caption("Dibuat dengan ❤️ menggunakan LSTM Seq2Seq")
