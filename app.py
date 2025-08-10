@@ -6,7 +6,7 @@ import joblib
 
 # === 1. Load model dan scaler ===
 encoder_model = load_model("seq2seqencodermodelfix.keras")
-decoder_model = load_model("seq2seqdecodermodelfix.ker")
+decoder_model = load_model("seq2seqdecodermodelfix.keras")
 scaler = joblib.load("scaler (9).pkl")
 
 # === 2. Parameter ===
