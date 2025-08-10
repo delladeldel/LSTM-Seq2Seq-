@@ -14,7 +14,7 @@ def load_models():
 # --- Load scaler ---
 @st.cache_resource
 def load_scaler():
-    return joblib.load("scaler.gz")
+    return joblib.load("scaler (9).pkl")
 
 # --- Fungsi prediksi Seq2Seq ---
 def predict_sequence(input_seq, encoder_model, decoder_model, output_steps):
