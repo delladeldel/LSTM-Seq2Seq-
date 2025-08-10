@@ -1,81 +1,78 @@
 import streamlit as st
-import numpy as np
 import pandas as pd
-import tensorflow as tf
-import pickle
+import numpy as np
+import matplotlib.pyplot as plt
 from tensorflow.keras.models import load_model
+import joblib
+from datetime import timedelta
 
-# ======== Load Model & Scaler ========
-@st.cache_resource
-def load_models():
-    encoder_model = load_model("seq2seqencodermodelfix.keras")
-    decoder_model = load_model("seq2seqdecodermodelfix.keras")
-    return encoder_model, decoder_model
+# Load model dan scaler
+encoder_model = load_model("seq2seqencodermodelfix.keras")
+decoder_model = load_model("seq2seqdecodermodelfix.keras")
+scaler = joblib.load("scaler (9).pkl")
 
-@st.cache_resource
-def load_scaler():
-    with open("scaler (9).pkl", "rb") as f:
-        scaler = pickle.load(f)
-    return scaler
+input_len = 60
+output_len = 60
+n_features = 1
 
-encoder_model, decoder_model = load_models()
-scaler = load_scaler()
+st.title("LSTM Seq2Seq (Encoder-Decoder) Forecasting")
 
-# ======== Inference Function ========
-def predict_seq(input_sequence, input_len=60, output_len=60):
-    # Normalisasi input
-    input_sequence = scaler.transform(np.array(input_sequence).reshape(-1, 1))
-    input_sequence = input_sequence.reshape(1, input_len, 1)
-
-    # Encode input sequence
-    state_h, state_c = encoder_model.predict(input_sequence)
-
-    # Decoder input awal (nol semua)
-    decoder_input = np.zeros((1, 1, 1))
-
-    decoded_output = []
-    for _ in range(output_len):
-        output, state_h, state_c = decoder_model.predict([decoder_input, state_h, state_c])
-        decoded_output.append(output[0, 0, 0])
-        decoder_input = output
-
-    # Denormalisasi hasil
-    decoded_output = scaler.inverse_transform(np.array(decoded_output).reshape(-1, 1)).flatten()
-    return decoded_output
-
-# ======== Streamlit UI ========
-st.title("📈 Seq2Seq LSTM Forecasting")
-st.write("Prediksi nilai sensor **tag_value** untuk 10 menit ke depan.")
-
-uploaded_file = st.file_uploader("Upload file CSV data sensor (harus ada kolom 'tag_value')", type=["csv"])
+uploaded_file = st.file_uploader("Upload file CSV", type="csv")
 
 if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
 
-    if "tag_value" not in df.columns:
-        st.error("CSV harus memiliki kolom 'tag_value'.")
-    elif len(df) < 120:
-        st.error("Data minimal harus memiliki 120 baris untuk prediksi.")
+    if 'ddate' not in df.columns or 'tag_value' not in df.columns:
+        st.error("File harus memiliki kolom 'ddate' dan 'tag_value'")
     else:
-        st.success("File diterima!")
-        st.line_chart(df["tag_value"], height=200)
+        df['ddate'] = pd.to_datetime(df['ddate'])
+        df = df.sort_values('ddate')
 
-        # Ambil 120 data terakhir
-        last_data = df["tag_value"].values[-120:]
+        st.subheader("Preview Data")
+        st.dataframe(df.tail(10))
 
-        # Prediksi
-        prediction = predict_seq(last_data)
+        # Ambil 60 data terakhir
+        data_input = df['tag_value'].values[-input_len:]
+        last_ddate = df['ddate'].iloc[-1]
 
-        st.subheader("Hasil Prediksi")
-        st.line_chart(prediction, height=200)
+        # Normalisasi dan reshape
+        data_input = scaler.transform(data_input.reshape(-1, 1))
+        encoder_input = data_input.reshape(1, input_len, 1)
 
-        # Gabung data aktual + prediksi
-        df_pred = pd.DataFrame({
-            "Actual": np.concatenate([df["tag_value"].values, [np.nan]*60]),
-            "Prediction": np.concatenate([[np.nan]*len(df), prediction])
-        })
+        # Encode input sequence
+        state_h, state_c = encoder_model.predict(encoder_input)
+        states = [state_h, state_c]
 
-        st.subheader("Aktual vs Prediksi")
-        st.line_chart(df_pred, height=300)
+        # Decoder input awal (0)
+        decoder_input = np.zeros((1, 1, 1))
 
-st.caption("Dibuat dengan ❤️ menggunakan LSTM Seq2Seq")
+        predictions_scaled = []
+
+        for i in range(output_len):
+            pred, h, c = decoder_model.predict([decoder_input] + states)
+            pred_value = pred[0, 0, 0]
+            predictions_scaled.append(pred_value)
+
+            # Update decoder input dan state
+            decoder_input = np.array(pred_value).reshape(1, 1, 1)
+            states = [h, c]
+
+        # Inverse transform hasil prediksi
+        predictions = scaler.inverse_transform(np.array(predictions_scaled).reshape(-1, 1))
+
+        # Buat rentang waktu prediksi
+        time_interval = df['ddate'].diff().mode()[0] if df['ddate'].diff().mode().size > 0 else timedelta(seconds=10)
+        future_dates = [last_ddate + (i + 1) * time_interval for i in range(output_len)]
+        pred_df = pd.DataFrame({'ddate': future_dates, 'predicted_value': predictions.flatten()})
+
+        # Plot
+        st.subheader("Prediksi 60 Langkah ke Depan")
+        fig, ax = plt.subplots()
+        ax.plot(df['ddate'].iloc[-200:], df['tag_value'].iloc[-200:], label='Data Historis')
+        ax.plot(pred_df['ddate'], pred_df['predicted_value'], label='Prediksi', color='red')
+        ax.legend()
+        plt.xticks(rotation=45)
+        st.pyplot(fig)
+
+        st.subheader("Prediksi data")
+        st.dataframe(pred_df)
