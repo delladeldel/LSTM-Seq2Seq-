@@ -5,12 +5,12 @@ from tensorflow.keras.models import load_model
 import joblib
 
 # === 1. Load model dan scaler ===
-encoder_model = load_model("encoder_model.h5")
-decoder_model = load_model("decoder_model.h5")
-scaler = joblib.load("scaler.pkl")
+encoder_model = load_model("seq2seqencodermodelfix.keras")
+decoder_model = load_model("seq2seqdecodermodelfix.ker")
+scaler = joblib.load("scaler (9).pkl")
 
 # === 2. Parameter ===
-input_len = 120   # jumlah data input
+input_len = 60   # jumlah data input
 output_len = 60   # jumlah langkah yang diprediksi
 
 # === 3. Upload file ===
