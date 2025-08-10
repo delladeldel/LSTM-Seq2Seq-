@@ -1,78 +1,112 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import tensorflow as tf
+import pickle
+from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
-from tensorflow.keras.models import load_model
-import joblib
-from datetime import timedelta
 
-# Load model dan scaler
-encoder_model = load_model("seq2seqencodermodelfix.keras")
-decoder_model = load_model("seq2seqdecodermodelfix.keras")
-scaler = joblib.load("scaler (9).pkl")
+# Load the scaler
+try:
+    with open('scaler (9).pkl', 'rb') as f:
+        scaler = pickle.load(f)
+except FileNotFoundError:
+    st.error("Scaler file not found. Please upload 'scaler.pkl'.")
+    st.stop()
+
+# Load the models
+try:
+    # Load using the native Keras format
+    encoder_model = tf.keras.models.load_model("seq2seqencodermodelfix.keras", compile=False)
+    decoder_model = tf.keras.models.load_model("seq2seqdecodermodelfix.keras", compile=False)
+except Exception as e:
+    st.error(f"Error loading models: {e}. Please ensure 'seq2seqencodermodelfix.keras' and 'seq2seqdecodermodelfix.keras' are in the same directory.")
+    st.stop()
+
 
 input_len = 60
 output_len = 60
 n_features = 1
+latent_dim = 64 # Ensure this matches your model's latent_dim
 
-st.title("LSTM Seq2Seq (Encoder-Decoder) Forecasting")
+def predict_future(input_seq, output_len=60):
+    # Encode input as initial state
+    states_value = encoder_model.predict(input_seq)
 
-uploaded_file = st.file_uploader("Upload file CSV", type="csv")
+    # Initialize decoder input (first step)
+    target_seq = np.zeros((1, 1, n_features))
 
+    predictions_scaled = []
+
+    for _ in range(output_len):
+        output_tokens, h, c = decoder_model.predict([target_seq] + states_value)
+
+        # Store prediction
+        predictions_scaled.append(output_tokens[0, 0, 0])
+
+        # Update target_seq with latest prediction
+        target_seq = np.zeros((1, 1, n_features))
+        target_seq[0, 0, 0] = output_tokens[0, 0, 0]
+
+        # Update state
+        states_value = [h, c]
+
+    return np.array(predictions_scaled).reshape(-1, 1)
+
+st.title("Time Series Prediction with Seq2Seq LSTM")
+
+st.sidebar.header("Upload Data")
+uploaded_file = st.sidebar.file_uploader("Upload your CSV file (should contain 'ddate' and 'tag_value' columns)", type=["csv"])
+
+df = None
 if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
+    df['ddate'] = pd.to_datetime(df['ddate'])
+    df = df.sort_values('ddate')
+    st.sidebar.success("File uploaded successfully!")
 
-    if 'ddate' not in df.columns or 'tag_value' not in df.columns:
-        st.error("File harus memiliki kolom 'ddate' dan 'tag_value'")
-    else:
-        df['ddate'] = pd.to_datetime(df['ddate'])
-        df = df.sort_values('ddate')
+if df is not None:
+    st.subheader("Original Data (Last 200 points)")
+    st.write(df[['ddate', 'tag_value']].tail(200))
 
-        st.subheader("Preview Data")
-        st.dataframe(df.tail(10))
+    if len(df) >= input_len:
+        st.subheader(f"Predicting next {output_len} steps")
 
-        # Ambil 60 data terakhir
-        data_input = df['tag_value'].values[-input_len:]
-        last_ddate = df['ddate'].iloc[-1]
+        # Get the last input sequence from the original data
+        last_sequence_full = df['tag_value'].values[-input_len:].reshape(-1, 1)
 
-        # Normalisasi dan reshape
-        data_input = scaler.transform(data_input.reshape(-1, 1))
-        encoder_input = data_input.reshape(1, input_len, 1)
+        # Normalisasi data
+        last_sequence_scaled = scaler.transform(last_sequence_full)
 
-        # Encode input sequence
-        state_h, state_c = encoder_model.predict(encoder_input)
-        states = [state_h, state_c]
+        # Reshape for model input
+        encoder_input_future = last_sequence_scaled.reshape((1, input_len, n_features))
 
-        # Decoder input awal (0)
-        decoder_input = np.zeros((1, 1, 1))
+        # Run prediction
+        future_predictions_scaled = predict_future(encoder_input_future, output_len)
+        future_predictions = scaler.inverse_transform(future_predictions_scaled)
 
-        predictions_scaled = []
+        # Create timestamps for future predictions
+        last_date = df['ddate'].iloc[-1]
+        future_dates = pd.to_datetime([last_date + pd.Timedelta(seconds=10 * (i+1)) for i in range(output_len)]) # Assuming 10 second intervals
 
-        for i in range(output_len):
-            pred, h, c = decoder_model.predict([decoder_input] + states)
-            pred_value = pred[0, 0, 0]
-            predictions_scaled.append(pred_value)
+        # Create DataFrames for plotting
+        historical_df = df[['ddate', 'tag_value']].tail(200).copy() # Display last 200 historical points
+        future_df = pd.DataFrame({'ddate': future_dates, 'tag_value': future_predictions.flatten()})
 
-            # Update decoder input dan state
-            decoder_input = np.array(pred_value).reshape(1, 1, 1)
-            states = [h, c]
-
-        # Inverse transform hasil prediksi
-        predictions = scaler.inverse_transform(np.array(predictions_scaled).reshape(-1, 1))
-
-        # Buat rentang waktu prediksi
-        time_interval = df['ddate'].diff().mode()[0] if df['ddate'].diff().mode().size > 0 else timedelta(seconds=10)
-        future_dates = [last_ddate + (i + 1) * time_interval for i in range(output_len)]
-        pred_df = pd.DataFrame({'ddate': future_dates, 'predicted_value': predictions.flatten()})
-
-        # Plot
-        st.subheader("Prediksi 60 Langkah ke Depan")
-        fig, ax = plt.subplots()
-        ax.plot(df['ddate'].iloc[-200:], df['tag_value'].iloc[-200:], label='Data Historis')
-        ax.plot(pred_df['ddate'], pred_df['predicted_value'], label='Prediksi', color='red')
+        st.subheader("Historical Data and Future Predictions")
+        fig, ax = plt.subplots(figsize=(15, 6))
+        ax.plot(historical_df['ddate'], historical_df['tag_value'], label='Historical Data')
+        ax.plot(future_df['ddate'], future_df['tag_value'], label='Future Predictions', color='red', marker='x')
+        ax.set_title('Historical Data vs Future Predictions')
+        ax.set_xlabel('Date')
+        ax.set_ylabel('tag_value')
         ax.legend()
+        ax.grid(True)
         plt.xticks(rotation=45)
         st.pyplot(fig)
 
-        st.subheader("Prediksi data")
-        st.dataframe(pred_df)
+        st.subheader("Future Predictions Data")
+        st.write(future_df)
+
+    else:
+        st.warning(f"Not enough data to create an input sequence of length {input_len}. Please upload a CSV with at least {input_len} data points.")
