@@ -22,7 +22,7 @@ encoder_model, decoder_model = load_models()
 scaler = load_scaler()
 
 # ======== Inference Function ========
-def predict_seq(input_sequence, input_len=120, output_len=60):
+def predict_seq(input_sequence, input_len=60, output_len=60):
     # Normalisasi input
     input_sequence = scaler.transform(np.array(input_sequence).reshape(-1, 1))
     input_sequence = input_sequence.reshape(1, input_len, 1)
