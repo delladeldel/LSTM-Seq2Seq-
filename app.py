@@ -1,4 +1,3 @@
-%%writefile app.py
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -9,7 +8,7 @@ import matplotlib.pyplot as plt
 
 # Load the scaler
 try:
-    with open('scaler.pkl', 'rb') as f:
+    with open('scaler (9).pkl', 'rb') as f:
         scaler = pickle.load(f)
 except FileNotFoundError:
     st.error("Scaler file not found. Please upload 'scaler.pkl'.")
