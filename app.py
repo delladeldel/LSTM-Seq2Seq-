@@ -29,35 +29,30 @@ output_len = 60
 n_features = 1
 latent_dim = 64 # Ensure this matches your model's latent_dim
 
-def predict_future(input_seq, output_len=60):
-    # Encode input as initial state
-    states_value = encoder_model.predict(input_seq)
+def predict_future(encoder_input, output_len):
+    # Encode input
+    states_value = encoder_model.predict(encoder_input)
 
-    # Initialize decoder input (first step)
-    # The decoder expects input in the shape (batch_size, timesteps, features)
-    # For the first step, timesteps is 1
-    target_seq = np.zeros((input_seq.shape[0], 1, n_features))
+    # Bentuk target_seq awal
+    target_seq = np.zeros((1, 1, 1))
 
-    predictions_scaled = []
-
+    output_tokens = []
     for _ in range(output_len):
-        # Predict next token
-        output_tokens, h, c = decoder_model.predict([target_seq] + states_value)
+        # Pastikan states_value selalu list [h, c]
+        yhat, h, c = decoder_model.predict([target_seq] + list(states_value))
 
-        # Store prediction
-        # Take the first prediction from the output_tokens (batch size 1, timestep 1)
-        predictions_scaled.append(output_tokens[0, 0, 0])
+        # Simpan output
+        output_tokens.append(yhat[0, 0, 0])
 
-        # Update target_seq for the next step
-        # The next input to the decoder is the prediction we just made
-        target_seq = np.zeros((input_seq.shape[0], 1, n_features))
-        target_seq[0, 0, 0] = output_tokens[0, 0, 0]
+        # Update target_seq untuk langkah berikutnya
+        target_seq = np.zeros((1, 1, 1))
+        target_seq[0, 0, 0] = yhat[0, 0, 0]
 
-
-        # Update state
+        # Update states_value
         states_value = [h, c]
 
-    return np.array(predictions_scaled).reshape(-1, 1)
+    return np.array(output_tokens).reshape(-1, 1)
+
 
 st.title("Time Series Prediction with Seq2Seq LSTM")
 
