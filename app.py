@@ -28,9 +28,9 @@ def _save_uploaded(u_file, name):
     tmp.flush(); tmp.close()
     return tmp.name
 
-enc_path = _save_uploaded(enc_file, "enc_") or "seq2seqencodermodelfix (1).keras"
-dec_path = _save_uploaded(dec_file, "dec_") or "seq2seqdecodermodelfix (1).keras"
-train_path = _save_uploaded(train_file, "train_") or "seq2seq_training_modelfix.keras"
+enc_path = _save_uploaded(enc_file, "enc_") or "seq2seq_encoder_model (1).keras"
+dec_path = _save_uploaded(dec_file, "dec_") or "seq2seq_decoder_model (1).keras"
+train_path = _save_uploaded(train_file, "train_") or "seq2seq_training_model (1).keras"
 scaler_path = _save_uploaded(scaler_file, "scaler_") or "scaler (9).pkl"
 
 st.sidebar.write("Paths used:")
