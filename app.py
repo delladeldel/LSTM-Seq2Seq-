@@ -1,74 +1,63 @@
-import streamlit as st
-import pandas as pd
 import numpy as np
-import pickle
-import tensorflow as tf
-import matplotlib.pyplot as plt
+import pandas as pd
+import streamlit as st
+from tensorflow.keras.models import load_model
+import joblib
 
-# ========================
-# Load Model & Scaler
-# ========================
-encoder_model = tf.keras.models.load_model("seq2seqencodermodelfix.keras")
-decoder_model = tf.keras.models.load_model("seq2seqdecodermodelfix.keras")
+# === 1. Load model dan scaler ===
+encoder_model = load_model("encoder_model.h5")
+decoder_model = load_model("decoder_model.h5")
+scaler = joblib.load("scaler.pkl")
 
-with open("scaler (9).pkl", "rb") as f:
-    scaler = pickle.load(f)
+# === 2. Parameter ===
+input_len = 120   # jumlah data input
+output_len = 60   # jumlah langkah yang diprediksi
 
-# ========================
-# Streamlit UI
-# ========================
-st.title("🔮 Seq2Seq Forecasting - 10 Menit ke Depan")
-st.write("Upload file CSV dengan kolom **tag_value** untuk memprediksi 60 langkah ke depan.")
+# === 3. Upload file ===
+st.title("Prediksi Seq2Seq LSTM")
+uploaded_file = st.file_uploader("Upload file CSV", type="csv")
 
-uploaded_file = st.file_uploader("Upload file CSV", type=["csv"])
-
-if uploaded_file:
+if uploaded_file is not None:
     # Baca data
     df = pd.read_csv(uploaded_file)
-
-    if "tag_value" not in df.columns:
-        st.error("CSV harus memiliki kolom 'tag_value'")
+    
+    if 'tag_value' not in df.columns:
+        st.error("CSV harus punya kolom 'tag_value'")
     else:
-        st.success("Data berhasil dibaca!")
-
-        # Ambil 60 data terakhir
-        input_len = 60
-        last_sequence = df["tag_value"].values[-input_len:]
-
-        # Scaling
-        last_sequence_scaled = scaler.transform(last_sequence.reshape(-1, 1))
-        encoder_input = last_sequence_scaled.reshape(1, input_len, 1)
-
-        # ========================
-        # Inference
-        # ========================
-        # Encode input sequence
+        # Ambil data terakhir untuk input
+        data_input = df['tag_value'].values[-input_len:]
+        
+        # Normalisasi
+        data_input = scaler.transform(data_input.reshape(-1, 1))
+        
+        # Reshape untuk encoder
+        encoder_input = data_input.reshape(1, input_len, 1)
+        
+        # Encode input
         state_h, state_c = encoder_model.predict(encoder_input)
-
-        # Decoder prediction loop
-        output_len = 60
-        decoder_input = np.zeros((1, 1, 1))
-        states = [state_h, state_c]
-        outputs = []
-
+        
+        # Decoder start token (pakai nilai terakhir input)
+        target_seq = np.array(data_input[-1]).reshape(1, 1, 1)
+        
+        predictions = []
+        
+        # Loop prediksi langkah demi langkah
         for _ in range(output_len):
-            decoder_output, state_h, state_c = decoder_model.predict([decoder_input] + states)
-            outputs.append(decoder_output[0, 0])
-            decoder_input = decoder_output.reshape(1, 1, 1)
-            states = [state_h, state_c]
-
-        # Inverse scaling
-        outputs_rescaled = scaler.inverse_transform(np.array(outputs).reshape(-1, 1)).flatten()
-
-        # ========================
-        # Tampilkan Hasil
-        # ========================
-        st.subheader("📈 Hasil Prediksi")
-        fig, ax = plt.subplots()
-        ax.plot(range(len(df)), df["tag_value"], label="Data Asli")
-        ax.plot(range(len(df), len(df) + output_len), outputs_rescaled, label="Prediksi", color="red")
-        ax.legend()
-        st.pyplot(fig)
-
-        st.write("**Hasil Prediksi (60 langkah):**")
-        st.dataframe(pd.DataFrame({"Prediksi": outputs_rescaled}))
+            output_tokens, h, c = decoder_model.predict([target_seq, state_h, state_c])
+            
+            # Simpan hasil prediksi
+            predictions.append(output_tokens[0, 0, 0])
+            
+            # Update target_seq jadi hasil prediksi terakhir
+            target_seq = output_tokens.reshape(1, 1, 1)
+            
+            # Update state
+            state_h, state_c = h, c
+        
+        # Balikkan ke skala asli
+        predictions = scaler.inverse_transform(np.array(predictions).reshape(-1, 1)).flatten()
+        
+        # Tampilkan hasil
+        st.subheader("Hasil Prediksi 60 langkah ke depan")
+        st.line_chart(predictions)
+        st.write(predictions)
