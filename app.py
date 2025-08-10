@@ -1,3 +1,4 @@
+%%writefile app.py
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -8,7 +9,7 @@ import matplotlib.pyplot as plt
 
 # Load the scaler
 try:
-    with open('scaler (9).pkl', 'rb') as f:
+    with open('scaler.pkl', 'rb') as f:
         scaler = pickle.load(f)
 except FileNotFoundError:
     st.error("Scaler file not found. Please upload 'scaler.pkl'.")
@@ -34,19 +35,25 @@ def predict_future(input_seq, output_len=60):
     states_value = encoder_model.predict(input_seq)
 
     # Initialize decoder input (first step)
-    target_seq = np.zeros((1, 1, n_features))
+    # The decoder expects input in the shape (batch_size, timesteps, features)
+    # For the first step, timesteps is 1
+    target_seq = np.zeros((input_seq.shape[0], 1, n_features))
 
     predictions_scaled = []
 
     for _ in range(output_len):
+        # Predict next token
         output_tokens, h, c = decoder_model.predict([target_seq] + states_value)
 
         # Store prediction
+        # Take the first prediction from the output_tokens (batch size 1, timestep 1)
         predictions_scaled.append(output_tokens[0, 0, 0])
 
-        # Update target_seq with latest prediction
-        target_seq = np.zeros((1, 1, n_features))
+        # Update target_seq for the next step
+        # The next input to the decoder is the prediction we just made
+        target_seq = np.zeros((input_seq.shape[0], 1, n_features))
         target_seq[0, 0, 0] = output_tokens[0, 0, 0]
+
 
         # Update state
         states_value = [h, c]
@@ -78,7 +85,7 @@ if df is not None:
         # Normalisasi data
         last_sequence_scaled = scaler.transform(last_sequence_full)
 
-        # Reshape for model input
+        # Reshape for model input (batch_size, timesteps, features)
         encoder_input_future = last_sequence_scaled.reshape((1, input_len, n_features))
 
         # Run prediction
@@ -87,7 +94,8 @@ if df is not None:
 
         # Create timestamps for future predictions
         last_date = df['ddate'].iloc[-1]
-        future_dates = pd.to_datetime([last_date + pd.Timedelta(seconds=10 * (i+1)) for i in range(output_len)]) # Assuming 10 second intervals
+        # Assuming 10 second intervals - adjust if your data has different frequency
+        future_dates = pd.to_datetime([last_date + pd.Timedelta(seconds=10 * (i+1)) for i in range(output_len)])
 
         # Create DataFrames for plotting
         historical_df = df[['ddate', 'tag_value']].tail(200).copy() # Display last 200 historical points
