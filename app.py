@@ -28,8 +28,8 @@ def _save_uploaded(u_file, name):
     tmp.flush(); tmp.close()
     return tmp.name
 
-enc_path = _save_uploaded(enc_file, "enc_") or "seq2seqencodermodelfix.keras"
-dec_path = _save_uploaded(dec_file, "dec_") or "seq2seqdecodermodelfix.keras"
+enc_path = _save_uploaded(enc_file, "enc_") or "seq2seqencodermodelfix (1).keras"
+dec_path = _save_uploaded(dec_file, "dec_") or "seq2seqdecodermodelfix (1).keras"
 train_path = _save_uploaded(train_file, "train_") or "seq2seq_training_modelfix.keras"
 scaler_path = _save_uploaded(scaler_file, "scaler_") or "scaler (9).pkl"
 
