@@ -8,8 +8,8 @@ from tensorflow.keras.models import load_model
 # ======== Load Model & Scaler ========
 @st.cache_resource
 def load_models():
-    encoder_model = load_model("seq2seqencodermodel.keras")
-    decoder_model = load_model("seq2seqdecodermodel.keras")
+    encoder_model = load_model("seq2seqencodermodelfix.keras")
+    decoder_model = load_model("seq2seqdecodermodelfix.keras")
     return encoder_model, decoder_model
 
 @st.cache_resource
