@@ -7,9 +7,9 @@ import joblib
 from datetime import timedelta
 
 # Load model dan scaler
-encoder_model = load_model("seq2seq_encoder_model (1).h5")
-decoder_model = load_model("seq2seq_decoder_model (1).h5")
-scaler = joblib.load("scaler (9).pkl")
+encoder_model = load_model("seq2seq_encoder_model (1) (1).h5")
+decoder_model = load_model("seq2seq_decoder_model (1) (1).h5")
+scaler = joblib.load("scaler (9) (1).pkl")
 
 input_len = 60
 output_len = 60
