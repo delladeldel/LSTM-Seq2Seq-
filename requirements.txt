@@ -1,7 +1,10 @@
-streamlit
-tensorflow>=2.12,<2.19
 scikit-learn
 pandas
 numpy
 matplotlib
 joblib
+streamlit
+tensorflow==2.15.0
+numpy==1.24.3
+ml-dtypes==0.2.0
+
