@@ -1,11 +1,9 @@
-streamlit==1.52.2
-tensorflow==2.15.0
-keras==2.15.0
-numpy==1.24.3
-ml-dtypes==0.2.0
-h5py==3.9.0
+streamlit
+tensorflow==2.20.0
+keras==3.13.2
+numpy==2.1.3
 pandas
 matplotlib
 scikit-learn
 joblib
-
+h5py
