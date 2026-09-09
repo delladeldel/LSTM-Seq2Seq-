@@ -5,6 +5,15 @@ import matplotlib.pyplot as plt
 from tensorflow.keras.models import load_model
 import joblib
 from datetime import timedelta
+import keras
+
+
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import (
+    mean_squared_error,
+    mean_absolute_error,
+    mean_absolute_percentage_error
+)
 
 # Load model dan scaler
 encoder_model = load_model("encoder_model.keras")
