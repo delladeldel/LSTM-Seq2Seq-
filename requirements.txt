@@ -4,7 +4,8 @@ numpy
 matplotlib
 joblib
 streamlit
-tensorflow==2.15.0
+tensorflow==2.13.1
+keras==2.13.1
 numpy==1.24.3
-ml-dtypes==0.2.0
+h5py==3.9.0
 
