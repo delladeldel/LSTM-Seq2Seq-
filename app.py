@@ -16,8 +16,8 @@ from sklearn.metrics import (
 )
 
 # Load model dan scaler
-encoder_model = load_model("encoder_model.keras")
-decoder_model = load_model("decoder_model.keras")
+encoder_model = load_model("seq2seq_encoder_model (1).h5")
+decoder_model = load_model("seq2seq_decoder_model (1).h5")
 scaler = joblib.load("scaler (9).pkl")
 
 input_len = 60
